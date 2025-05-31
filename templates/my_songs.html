@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Songs - Rhythmica</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    
+</head>
+<body>
+{% include 'header.html' %}
+<div class="playlist-section">
+    <h2>Your Playlists:</h2>
+    <ul>
+        {% for playlist in playlists %}
+            <li>
+                <strong><a href="/playlists/{{ playlist.id }}">{{ playlist.name }}</a></strong>
+                <div class="playlist-actions">
+                    <form method="post" action="/playlists/{{ playlist.id }}/rename">
+                        <input type="text" name="new_name" placeholder="New name" required>
+                        <button type="submit">Rename</button>
+                    </form>
+                    <form method="post" action="/playlists/{{ playlist.id }}/delete">
+                        <button type="submit" onclick="return confirm('Are you sure?')">Delete</button>
+                    </form>
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+    <form method="post" action="/playlists/create">
+        <input type="text" name="name" placeholder="New Playlist Name" required>
+        <button class="button add-playlist-btn" type="submit">Create Playlist</button>
+    </form>
+</div>
+
+<div class="songs-section">
+    <h2>Downloaded Songs ({{ songs|length }}):</h2>
+    <ul>
+        {% for song in songs %}
+            <li class="song-item" data-title="{{ song.song.title if song.song else '' }}">
+                <span class="song-info">
+                    {{ song.song.title if song.song else song.file_path.split('/')[-1].replace('.mp3', '') }}
+                    — {{ song.song.artist if song.song else '' }}
+                </span>
+                <audio src="/media/{{ song.file_path }}" preload="metadata"></audio>
+
+                {% if playlists and song.song %}
+                    <form method="post" action="/playlists/add" style="display: inline-block; margin-left: 10px;">
+                        <input type="hidden" name="song_id" value="{{ song.song.id }}">
+                        <select name="playlist_id">
+                            {% for playlist in playlists %}
+                                <option value="{{ playlist.id }}">{{ playlist.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit">Add to Playlist</button>
+                    </form>
+                {% endif %}
+
+                <form method="post" action="/songs/{{ song.id }}/delete" class="delete-form" style="display:inline;">
+                    <button type="submit" class="delete-btn" onclick="return confirm('Удалить эту песню?')">Удалить</button>
+                </form>
+            </li>
+        {% endfor %}
+    </ul>
+</div>
+
+<!-- Нижняя панель воспроизведения -->
+<div class="player-bar">
+    <div class="player-info" id="current-song-info">Песня не выбрана</div>
+
+    <input type="range" id="seek-slider" min="0" max="100" value="0" step="1">
+
+    <div class="player-controls">
+        <button id="prev">⏮️</button>
+        <button id="play-pause">▶️</button>
+        <button id="next">⏭️</button>
+        <button id="shuffle">🔀</button>
+    </div>
+</div>
+<div id="time-display"></div>
+
+<script>
+    const songs = document.querySelectorAll(".song-item");
+    const playPauseBtn = document.getElementById("play-pause");
+    const shuffleBtn = document.getElementById("shuffle");
+    const playerInfo = document.getElementById("current-song-info");
+    const seekSlider = document.getElementById("seek-slider");
+    const timeDisplay = document.getElementById("time-display");
+    const prevBtn = document.getElementById("prev");
+    const nextBtn = document.getElementById("next");
+
+    let currentAudio = null;
+    let currentIndex = -1;
+    let isPlaying = false;
+    let isShuffle = false;
+    let shuffledOrder = [];
+    let shuffledIndex = -1;
+
+    function formatTime(seconds) {
+        const min = Math.floor(seconds / 60);
+        const sec = Math.floor(seconds % 60);
+        return `${min}:${sec.toString().padStart(2, '0')}`;
+    }
+
+    function shuffleArray(array) {
+        let shuffled = array.slice();
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+    }
+
+    function attachEndedListener(audio) {
+        audio.addEventListener("ended", () => {
+            playNext();
+        });
+    }
+
+    function playSong(index) {
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio.currentTime = 0;
+            songs[currentIndex]?.classList.remove("playing");
+        }
+
+        currentIndex = index;
+        currentAudio = songs[currentIndex].querySelector("audio");
+        currentAudio.play();
+        isPlaying = true;
+        playPauseBtn.textContent = "⏸️";
+
+        const title = songs[currentIndex].getAttribute("data-title") || "Unknown";
+        playerInfo.textContent = title;
+        songs[currentIndex].classList.add("playing");
+
+        seekSlider.value = 0;
+        attachEndedListener(currentAudio);
+    }
+
+    function getNextIndex() {
+        if (isShuffle) {
+            if (shuffledIndex + 1 < shuffledOrder.length) {
+                return shuffledOrder[++shuffledIndex];
+            } else {
+                shuffledOrder = shuffleArray([...Array(songs.length).keys()]);
+                shuffledIndex = 0;
+                return shuffledOrder[shuffledIndex];
+            }
+        } else {
+            return (currentIndex + 1) % songs.length;
+        }
+    }
+
+    function playNext() {
+        const nextIndex = getNextIndex();
+        playSong(nextIndex);
+    }
+
+    function getPrevIndex() {
+        if (isShuffle) {
+            if (shuffledIndex - 1 >= 0) {
+                return shuffledOrder[--shuffledIndex];
+            } else {
+                shuffledOrder = shuffleArray([...Array(songs.length).keys()]);
+                shuffledIndex = shuffledOrder.length - 1;
+                return shuffledOrder[shuffledIndex];
+            }
+        } else {
+            return (currentIndex - 1 + songs.length) % songs.length;
+        }
+    }
+
+    function playPrev() {
+        const prevIndex = getPrevIndex();
+        playSong(prevIndex);
+    }
+
+    playPauseBtn.addEventListener("click", () => {
+        if (!currentAudio) {
+            if (songs.length > 0) {
+                currentIndex = 0;
+                if (isShuffle) {
+                    shuffledOrder = shuffleArray([...Array(songs.length).keys()]);
+                    shuffledIndex = 0;
+                    playSong(shuffledOrder[shuffledIndex]);
+                } else {
+                    playSong(currentIndex);
+                }
+            }
+            return;
+        }
+        if (isPlaying) {
+            currentAudio.pause();
+            isPlaying = false;
+            playPauseBtn.textContent = "▶️";
+        } else {
+            currentAudio.play();
+            isPlaying = true;
+            playPauseBtn.textContent = "⏸️";
+        }
+    });
+
+    nextBtn.addEventListener("click", playNext);
+    prevBtn.addEventListener("click", playPrev);
+
+    shuffleBtn.addEventListener("click", () => {
+        isShuffle = !isShuffle;
+        shuffleBtn.style.color = isShuffle ? "#1de9b6" : "white";
+        if (isShuffle) {
+            shuffledOrder = shuffleArray([...Array(songs.length).keys()]);
+            shuffledIndex = shuffledOrder.indexOf(currentIndex);
+        }
+    });
+
+    seekSlider.addEventListener("input", () => {
+        if (currentAudio) {
+            const seekTo = currentAudio.duration * (seekSlider.value / 100);
+            currentAudio.currentTime = seekTo;
+        }
+    });
+
+    setInterval(() => {
+        if (currentAudio && currentAudio.duration) {
+            const progress = (currentAudio.currentTime / currentAudio.duration) * 100;
+            seekSlider.value = progress;
+
+            timeDisplay.textContent = formatTime(currentAudio.currentTime) + " / " + formatTime(currentAudio.duration);
+        } else {
+            seekSlider.value = 0;
+            timeDisplay.textContent = "";
+        }
+    }, 500);
+
+    songs.forEach((songItem, index) => {
+        songItem.querySelector(".song-info").addEventListener("click", () => {
+            if (isShuffle) {
+                shuffledIndex = shuffledOrder.indexOf(index);
+            }
+            playSong(index);
+        });
+    });
+</script>
+
+</body>
+</html>

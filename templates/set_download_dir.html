@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Настройка директории загрузки</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  {% include 'header.html' %}
+  <h1>Укажите директорию для загрузки песен</h1>
+  <form action="/set_download_dir" method="post">
+    <input type="text" name="path" placeholder="Пример: D:/music" required style="width: 300px;">
+    <button type="submit">Сохранить</button>
+  </form>
+  <p><a href="/songs">Назад к песням</a></p>
+</body>
+</html>

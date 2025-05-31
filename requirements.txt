@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+sqlalchemy
+mysql-connector-python
+pydantic
+yt-dlp
+aiofiles
+# passlib[bcrypt]
+# jinja2
+# python-multipart
+# httpx
+# requests
+#itsdangerous
+#pydantic 

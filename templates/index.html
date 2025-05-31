@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rhythmica — Музыкальный сервис нового поколения</title>
+    <style>
+        :root {
+            --primary: #FF6B9D;
+            --secondary: #A769FF;
+            --dark-bg: #121212;
+            --card-bg: #1E1E1E;
+            --text-light: #FFFFFF;
+            --text-gray: #B3B3B3;
+            --gradient: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Montserrat', 'Segoe UI', sans-serif;
+            background-color: var(--dark-bg);
+            color: var(--text-light);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        /* Шапка */
+        header {
+            background: rgba(18, 18, 18, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 20px 0;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid rgba(255, 107, 157, 0.1);
+        }
+        
+        .logo {
+            font-size: 28px;
+            font-weight: 800;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            display: inline-block;
+        }
+        
+        /* Главный баннер */
+        .hero {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            padding-top: 80px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 30% 50%, rgba(167, 105, 255, 0.1) 0%, transparent 50%);
+            z-index: -1;
+        }
+        
+        .hero-content {
+            max-width: 600px;
+        }
+        
+        .hero h1 {
+            font-size: 52px;
+            margin-bottom: 20px;
+            line-height: 1.2;
+        }
+        
+        .hero p {
+            font-size: 18px;
+            color: var(--text-gray);
+            margin-bottom: 30px;
+        }
+        
+        /* Кнопки */
+        .btn {
+            display: inline-block;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            margin-right: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .btn-primary {
+            background: var(--gradient);
+            color: white;
+            box-shadow: 0 4px 15px rgba(167, 105, 255, 0.4);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(167, 105, 255, 0.6);
+        }
+        
+        .btn-outline {
+            border: 2px solid var(--primary);
+            color: var(--primary);
+        }
+        
+        .btn-outline:hover {
+            background: rgba(255, 107, 157, 0.1);
+        }
+        
+        /* Особенности */
+        .features {
+            padding: 100px 0;
+            background-color: var(--dark-bg);
+        }
+        
+        .features h2 {
+            text-align: center;
+            font-size: 36px;
+            margin-bottom: 60px;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            display: inline-block;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+        }
+        
+        .feature-card {
+            background-color: var(--card-bg);
+            border-radius: 15px;
+            padding: 30px;
+            transition: transform 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-10px);
+            border-color: rgba(167, 105, 255, 0.3);
+        }
+        
+        .feature-icon {
+            font-size: 40px;
+            margin-bottom: 20px;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        
+        .feature-card h3 {
+            font-size: 22px;
+            margin-bottom: 15px;
+        }
+        
+        .feature-card p {
+            color: var(--text-gray);
+        }
+        
+        /* Футер */
+        footer {
+            background-color: #0D0D0D;
+            padding: 50px 0 20px;
+            text-align: center;
+        }
+        
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+        }
+        
+        .footer-links a {
+            color: var(--text-gray);
+            margin: 0 15px;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        
+        .footer-links a:hover {
+            color: var(--primary);
+        }
+        
+        .copyright {
+            color: var(--text-gray);
+            font-size: 14px;
+            margin-top: 30px;
+        }
+        
+        /* Анимации */
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        
+        .music-note {
+            position: absolute;
+            opacity: 0.3;
+            animation: float 4s ease-in-out infinite;
+        }
+        
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 36px;
+            }
+            
+            .hero p {
+                font-size: 16px;
+            }
+            
+            .btn {
+                display: block;
+                width: 100%;
+                margin-right: 0;
+                text-align: center;
+            }
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <!-- Шапка -->
+    <header>
+        <div class="container">
+            <div class="logo">Rhythmica</div>
+        </div>
+    </header>
+    
+    <!-- Главный баннер -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1>Ваша музыка — ваш мир</h1>
+                <p>Rhythmica — это новый взгляд на музыкальный опыт. Откройте для себя миллионы треков, создавайте уникальные плейлисты и наслаждайтесь музыкой без ограничений.</p>
+                <div class="hero-buttons">
+                    <a href="/register" class="btn btn-primary">Начать бесплатно</a>
+                    <a href="/login" class="btn btn-outline">Войти</a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Декоративные элементы -->
+        <div class="music-note" style="top: 20%; left: 10%; font-size: 24px;">
+            <i class="fas fa-music"></i>
+        </div>
+        <div class="music-note" style="top: 70%; left: 85%; font-size: 32px; animation-delay: 0.5s;">
+            <i class="fas fa-music"></i>
+        </div>
+        <div class="music-note" style="top: 40%; left: 75%; font-size: 18px; animation-delay: 1s;">
+            <i class="fas fa-music"></i>
+        </div>
+    </section>
+    
+    <!-- Особенности -->
+    <section class="features">
+        <div class="container">
+            <h2>Почему Rhythmica?</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <h3>Мощный поиск</h3>
+                    <p>Ищите и загружайте любимые песни из обширной базы данных Deezer. Находите именно то, что вам нравится.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-headphones"></i>
+                    </div>
+                    <h3>Персональные плейлисты</h3>
+                    <p>Создавайте уникальные коллекции музыки, организуйте их по настроению, жанру или любому другому критерию.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-lightbulb"></i>
+                    </div>
+                    <h3>Умные рекомендации</h3>
+                    <p>Получайте персональные рекомендации на основе ваших предпочтений и истории прослушиваний.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-cloud-download-alt"></i>
+                    </div>
+                    <h3>Офлайн-режим</h3>
+                    <p>Сохраняйте любимые треки и слушайте их без подключения к интернету в любое время.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Футер -->
+    <footer>
+        <div class="container">
+            <div class="footer-links">
+                <a href="#">О нас</a>
+                <a href="#">Возможности</a>
+                <a href="#">Тарифы</a>
+                <a href="#">Поддержка</a>
+                <a href="#">Контакты</a>
+            </div>
+            <div class="copyright">
+                &copy; 2023 Rhythmica. Все права защищены.
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

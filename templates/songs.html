@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8"> 
+    <title>Поиск песен</title>
+    <link rel="stylesheet" href="/static/styles.css">
+
+</head>
+<body>
+    {% include 'header.html' %}
+
+    {% if request.query_params.get("status") == "success" %}
+        <div class="message success">✅ Песня успешно загружена!</div>
+    {% elif request.query_params.get("status") == "error" %}
+        <div class="message error">❌ Ошибка при загрузке песни.</div>
+    {% endif %}
+
+    <form action="/songs" method="get">
+        <input type="text" name="q" value="{{ query }}" placeholder="Введите название песни">
+        <button type="submit">🔍 Найти</button>
+    </form>
+
+    {% if songs %}
+        <h2>Результаты поиска:</h2>
+        <ul id="song-list">
+            {% for song in songs %}
+                <li 
+                    data-preview="{{ song.preview }}" 
+                    data-title="{{ song.title }}" 
+                    data-artist="{{ song.artist.name }}" 
+                    tabindex="0"
+                    role="button"
+                    aria-label="Воспроизвести {{ song.title }} - {{ song.artist.name }}"
+                >
+                    <img src="{{ song.album.cover_small }}" alt="Обложка {{ song.title }}">
+                    <div class="song-info">
+                        <strong>{{ song.title }}</strong><br>
+                        {{ song.artist.name }}<br>
+                    </div>
+
+                    <!-- Кнопка Скачать -->
+                    <form onsubmit="return downloadSong(event, this);" action="/download" method="post" aria-label="Скачать {{ song.title }}">
+                        <input type="hidden" name="title" value="{{ song.title }}">
+                        <input type="hidden" name="artist" value="{{ song.artist.name }}">
+                        <input type="hidden" name="query" value="{{ query }}">
+                        <input type="hidden" name="referer" value="search">
+                        <input type="hidden" name="genre" value="{{ song.genre or 'Unknown' }}">
+                        <button type="submit">⬇ Скачать</button>
+                    </form>  
+
+                    <!-- Кнопка Лайк -->
+                    <form onsubmit="likeSong(event, this)" method="post" aria-label="Лайкнуть {{ song.title }}">
+                        <input type="hidden" name="title" value="{{ song.title }}">
+                        <input type="hidden" name="artist" value="{{ song.artist.name }}">
+                        <input type="hidden" name="genre" value="{{ song.genre or 'Unknown' }}">
+                        <button type="submit">❤️ Лайк</button>
+                    </form>
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <!-- Нижняя панель воспроизведения -->
+    <audio id="audio-player" preload="none" style="display:none;"></audio>
+
+    <div class="player-bar" aria-live="polite" aria-atomic="true" role="region" aria-label="Плеер">
+        <div class="player-info" id="current-song-info">Песня не выбрана</div>
+        <input type="range" id="seek-slider" min="0" max="100" value="0" step="1" aria-label="Ползунок воспроизведения">
+
+        <div class="player-controls">
+            <button id="prev" aria-label="Предыдущая песня">⏮️</button>
+            <button id="play-pause" aria-label="Воспроизвести/пауза">▶️</button>
+            <button id="next" aria-label="Следующая песня">⏭️</button>
+            <button id="shuffle" aria-label="Перемешать">🔀</button>
+        </div>
+    </div>
+    <div id="time-display" aria-live="off"></div>
+
+<script>
+    // Селекторы
+    const audioPlayer = document.getElementById('audio-player');
+    const songList = document.getElementById('song-list');
+    const playPauseBtn = document.getElementById('play-pause');
+    const shuffleBtn = document.getElementById('shuffle');
+    const playerInfo = document.getElementById('current-song-info');
+    const seekSlider = document.getElementById('seek-slider');
+    const timeDisplay = document.getElementById('time-display');
+    const prevBtn = document.getElementById('prev');
+    const nextBtn = document.getElementById('next');
+
+    let songs = [];
+    if (songList) {
+        songs = Array.from(songList.querySelectorAll('li'));
+    }
+    let currentIndex = -1;
+    let isPlaying = false;
+    let isShuffle = false;
+    let shuffledOrder = [];
+    let shuffledIndex = -1;
+
+    function formatTime(seconds) {
+        const min = Math.floor(seconds / 60);
+        const sec = Math.floor(seconds % 60);
+        return `${min}:${sec.toString().padStart(2, '0')}`;
+    }
+
+    function shuffleArray(array) {
+        let shuffled = array.slice();
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+    }
+
+    function setActiveSong(index) {
+        songs.forEach((el, i) => el.classList.toggle('playing', i === index));
+    }
+
+    function playSong(index) {
+        if (index < 0 || index >= songs.length) return;
+        currentIndex = index;
+        const songItem = songs[index];
+        const previewUrl = songItem.getAttribute('data-preview');
+        const title = songItem.getAttribute('data-title') || 'Unknown';
+        const artist = songItem.getAttribute('data-artist') || '';
+        playerInfo.textContent = `${title} — ${artist}`;
+        audioPlayer.src = previewUrl;
+        audioPlayer.play().then(() => {
+            isPlaying = true;
+            playPauseBtn.textContent = "⏸️";
+            setActiveSong(index);
+        }).catch(err => {
+            console.error('Ошибка воспроизведения:', err);
+            playerInfo.textContent = "Ошибка воспроизведения";
+        });
+    }
+
+    function getNextIndex() {
+        if (isShuffle) {
+            if (shuffledIndex + 1 < shuffledOrder.length) {
+                return shuffledOrder[++shuffledIndex];
+            } else {
+                shuffledOrder = shuffleArray([...Array(songs.length).keys()]);
+                shuffledIndex = 0;
+                return shuffledOrder[shuffledIndex];
+            }
+        } else {
+            return (currentIndex + 1) % songs.length;
+        }
+    }
+
+    function playNext() {
+        playSong(getNextIndex());
+    }
+
+    function getPrevIndex() {
+        if (isShuffle) {
+            if (shuffledIndex - 1 >= 0) {
+                return shuffledOrder[--shuffledIndex];
+            } else {
+                shuffledOrder = shuffleArray([...Array(songs.length).keys()]);
+                shuffledIndex = shuffledOrder.length - 1;
+                return shuffledOrder[shuffledIndex];
+            }
+        } else {
+            return (currentIndex - 1 + songs.length) % songs.length;
+        }
+    }
+
+    function playPrev() {
+        playSong(getPrevIndex());
+    }
+
+    // Обработчики кнопок
+    playPauseBtn.addEventListener('click', () => {
+        if (!audioPlayer.src) {
+            if (songs.length > 0) {
+                playSong(0);
+            }
+            return;
+        }
+        if (isPlaying) {
+            audioPlayer.pause();
+            isPlaying = false;
+            playPauseBtn.textContent = "▶️";
+        } else {
+            audioPlayer.play();
+            isPlaying = true;
+            playPauseBtn.textContent = "⏸️";
+        }
+    });
+
+    shuffleBtn.addEventListener('click', () => {
+        isShuffle = !isShuffle;
+        shuffleBtn.style.color = isShuffle ? 'green' : '';
+        if (isShuffle) {
+            shuffledOrder = shuffleArray([...Array(songs.length).keys()]);
+            shuffledIndex = shuffledOrder.indexOf(currentIndex);
+        }
+    });
+
+    prevBtn.addEventListener('click', () => {
+        playPrev();
+    });
+
+    nextBtn.addEventListener('click', () => {
+        playNext();
+    });
+
+    // Обновление прогресса
+    audioPlayer.addEventListener('timeupdate', () => {
+        if (audioPlayer.duration) {
+            const progressPercent = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+            seekSlider.value = progressPercent;
+            timeDisplay.textContent = `${formatTime(audioPlayer.currentTime)} / ${formatTime(audioPlayer.duration)}`;
+        }
+    });
+
+    seekSlider.addEventListener('input', () => {
+        if (audioPlayer.duration) {
+            const seekTo = (seekSlider.value / 100) * audioPlayer.duration;
+            audioPlayer.currentTime = seekTo;
+        }
+    });
+
+    // При окончании песни - воспроизвести следующую
+    audioPlayer.addEventListener('ended', () => {
+        playNext();
+    });
+
+    // Клик по песне в списке — воспроизвести
+    songs.forEach((songEl, idx) => {
+        songEl.addEventListener('click', () => {
+            playSong(idx);
+        });
+        songEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                playSong(idx);
+            }
+        });
+    });
+        async function downloadSong(event, form) {
+            event.preventDefault(); // 100% остановка формы
+
+            const formData = new FormData(form);
+            const query = form.querySelector('input[name="query"]').value || "";
+
+            try {
+                const response = await fetch("/download", {
+                    method: "POST",
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.redirect) {
+                    // Теперь это выполнится гарантированно
+                    window.location.href = data.redirect;
+                } else {
+                    alert("Ошибка: редирект не получен.");
+                    window.location.href = "/songs?q=" + encodeURIComponent(query);
+                }
+            } catch (error) {
+                console.error("Ошибка загрузки:", error);
+                window.location.href = "/songs?q=" + encodeURIComponent(query) + "&status=error";
+            }
+
+            return false; // страховка, чтобы форма точно не отправилась
+        }
+        // отменяем стандартную отправку формы
+                
+                function likeSong(event, form) {
+        event.preventDefault();
+        const formData = new FormData(form);
+
+        fetch("/like", {
+            method: "POST",
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const likeButton = form.querySelector("button");
+                likeButton.disabled = true;
+                likeButton.innerText = "❤️ Лайкнуто";
+                likeButton.style.backgroundColor = "#ff4081";
+            } else if (data.message === "Песня уже лайкнута") {
+                alert("Вы уже лайкали эту песню.");
+            } else {
+                alert("Ошибка при лайке.");
+            }
+        })
+        .catch(error => {
+            console.error("Ошибка:", error);
+            alert("Произошла ошибка при лайке.");
+        });
+    }
+    </script>    
+</body>
+</html> 

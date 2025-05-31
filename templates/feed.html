@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Лента</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    {% include 'header.html' %}
+    <h1>Рекомендации</h1>
+    <p>Любимый жанр: <strong>{{ preferences.favorite_genre }}</strong></p>
+    <p>Любимый исполнитель: <strong>{{ preferences.favorite_artist }}</strong></p>
+
+    <ul id="songList"></ul>
+    <button id="loadMoreButton">Загрузить еще</button>
+    <p id="noMore" style="display: none;">Больше песен нет</p>
+
+    <div class="player-bar">
+        <button id="playPause">▶️</button>
+        <div id="nowPlaying">Ничего не играет</div>
+        <input type="range" id="seekSlider" min="0" max="100" value="0" step="1">
+        <span id="timeDisplay">00:00 / 00:00</span>
+        <audio id="audioPlayer"></audio>
+    </div>
+
+    <script>
+        let audioPlayer = document.getElementById("audioPlayer");
+        let playPauseBtn = document.getElementById("playPause");
+        let nowPlaying = document.getElementById("nowPlaying");
+        let seekSlider = document.getElementById("seekSlider");
+        let timeDisplay = document.getElementById("timeDisplay");
+        let isPlaying = false;
+
+        let loadedSongIds = new Set();
+
+        let currentPlayingLi = null;
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function playSong(src, title, artist, liElement) {
+            if (audioPlayer.src !== src) {
+                audioPlayer.src = src;
+            }
+            audioPlayer.play();
+            isPlaying = true;
+            nowPlaying.textContent = `${title} — ${artist}`;
+            playPauseBtn.textContent = "⏸️";
+
+            if (currentPlayingLi && currentPlayingLi !== liElement) {
+                currentPlayingLi.classList.remove('playing');
+            }
+            liElement.classList.add('playing');
+            currentPlayingLi = liElement;
+        }
+
+        playPauseBtn.addEventListener('click', () => {
+            if (!audioPlayer.src) return;
+            if (isPlaying) {
+                audioPlayer.pause();
+                isPlaying = false;
+                playPauseBtn.textContent = "▶️";
+                if (currentPlayingLi) {
+                    currentPlayingLi.classList.remove('playing');
+                }
+            } else {
+                audioPlayer.play();
+                isPlaying = true;
+                playPauseBtn.textContent = "⏸️";
+                if (currentPlayingLi) {
+                    currentPlayingLi.classList.add('playing');
+                }
+            }
+        });
+
+        audioPlayer.addEventListener('timeupdate', () => {
+            if (audioPlayer.duration) {
+                seekSlider.value = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+                timeDisplay.textContent = `${formatTime(audioPlayer.currentTime)} / ${formatTime(audioPlayer.duration)}`;
+            }
+        });
+
+        seekSlider.addEventListener('input', () => {
+            if (audioPlayer.duration) {
+                audioPlayer.currentTime = (seekSlider.value / 100) * audioPlayer.duration;
+            }
+        });
+
+        audioPlayer.addEventListener('ended', () => {
+            playPauseBtn.textContent = "▶️";
+            isPlaying = false;
+            if (currentPlayingLi) {
+                currentPlayingLi.classList.remove('playing');
+            }
+        });
+
+        function downloadSong(event, form) {
+            event.preventDefault();
+            const formData = new FormData(form);
+            fetch('/download', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const btn = form.querySelector("button");
+                    btn.disabled = true;
+                    btn.innerText = '⬇ Скачать';
+                    btn.classList.add('gradient-bg');
+                    btn.style.backgroundColor = ''; // сброс инлайн-цвета если был
+                } else {
+                    alert('Ошибка загрузки');
+                }
+            });
+        }
+
+        function likeSong(event, form) {
+            event.preventDefault();
+            const formData = new FormData(form);
+            fetch("/like", {
+                method: "POST",
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const btn = form.querySelector("button");
+                    btn.disabled = true;
+                    btn.innerText = "❤️ Лайк";
+                    btn.classList.add('gradient-bg');
+                    btn.style.backgroundColor = ''; // сброс инлайн-цвета если был
+                } else if (data.message === "Песня уже лайкнута") {
+                    alert("Вы уже лайкали эту песню.");
+                } else {
+                    alert("Ошибка при лайке.");
+                }
+            });
+        }
+
+        let loading = false;
+        let limit = 10;
+
+        async function loadMoreSongs() {
+            if (loading) return;
+            loading = true;
+
+            const res = await fetch(`/feed/slice?limit=${limit}`);
+            const data = await res.json();
+
+            if (!data.songs || data.songs.length === 0) {
+                document.getElementById("loadMoreButton").style.display = "none";
+                document.getElementById("noMore").style.display = "block";
+                loading = false;
+                return;
+            }
+
+            const songList = document.getElementById("songList");
+            data.songs.forEach(song => {
+                if (loadedSongIds.has(song.id)) {
+                    return;
+                }
+                loadedSongIds.add(song.id);
+
+                const li = document.createElement("li");
+                li.classList.add("song-item");
+                li.dataset.src = song.preview;
+                li.dataset.title = song.title;
+                li.dataset.artist = song.artist.name;
+                li.innerHTML = `
+                    <img src="${song.album.cover_small}" alt="Обложка">
+                    <div class="song-info">
+                        <div class="song-title">${song.title}</div>
+                        <div class="song-artist">${song.artist.name}</div>
+                    </div>
+                    <form onsubmit="downloadSong(event, this)" method="post" style="display:inline-block;">
+                        <input type="hidden" name="title" value="${song.title}">
+                        <input type="hidden" name="artist" value="${song.artist.name}">
+                        <input type="hidden" name="query" value="${song.query || ''}">
+                        <input type="hidden" name="referer" value="feed">
+                        <button type="submit" class="gradient-bg">⬇ Скачать</button>
+                    </form>
+                    <form onsubmit="likeSong(event, this)" method="post" style="display:inline-block; margin-left:5px;">
+                        <input type="hidden" name="title" value="${song.title}">
+                        <input type="hidden" name="artist" value="${song.artist.name}">
+                        <input type="hidden" name="genre" value="${song.genre || 'Unknown'}">
+                        <button type="submit" class="gradient-bg">❤️ Лайк</button>
+                    </form>
+                `;
+                songList.appendChild(li);
+
+                li.addEventListener('click', () => {
+                    playSong(song.preview, song.title, song.artist.name, li);
+                });
+            });
+
+            loading = false;
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            loadMoreSongs();
+            document.getElementById("loadMoreButton").addEventListener("click", loadMoreSongs);
+        });
+    </script>
+
+</body>
+</html>

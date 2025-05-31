@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Playlist - Rhythmica</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+{% include 'header.html' %}
+<h1>Playlist: {{ playlist.name }}</h1>
+<ul>
+    {% for song in songs %}
+        <li class="song-item"
+            data-title="{{ song.song.title }} — {{ song.song.artist }}"
+            data-file-path="{{ song.file_path }}">
+            <span class="song-info">
+                {{ song.song.title }} — {{ song.song.artist }}
+            </span>
+            <form method="post" action="/playlists/{{ playlist.id }}/remove-song" style="display:inline;" onsubmit="return confirm('Удалить эту песню из плейлиста?');">
+                <input type="hidden" name="song_id" value="{{ song.song.id }}">
+                <button type="submit" class="delete-btn">Удалить</button>
+            </form>
+        </li>
+    {% endfor %}
+</ul>
+
+<!-- Скрытый аудио-элемент -->
+<audio id="audio-player" preload="auto" style="display: none;"></audio>
+
+<!-- Глобальный плеер -->
+<div class="player-bar">
+    <div class="player-info" id="current-song-info">Песня не выбрана</div>
+
+    <input type="range" id="seek-slider" min="0" max="100" value="0" step="1">
+
+    <div class="player-controls">
+        <button id="prev">⏮️</button>
+        <button id="play-pause">▶️</button>
+        <button id="next">⏭️</button>
+        <button id="shuffle">🔀</button>
+    </div>
+</div>
+<div id="time-display"></div>
+
+<script>
+    // Инициализация аудио-элемента
+    const audioPlayer = document.getElementById('audio-player');
+    const songs = document.querySelectorAll(".song-item");
+    const playPauseBtn = document.getElementById("play-pause");
+    const shuffleBtn = document.getElementById("shuffle");
+    const playerInfo = document.getElementById("current-song-info");
+    const seekSlider = document.getElementById("seek-slider");
+    const timeDisplay = document.getElementById("time-display");
+    const prevBtn = document.getElementById("prev");
+    const nextBtn = document.getElementById("next");
+
+    let currentIndex = -1;
+    let isPlaying = false;
+    let isShuffle = false;
+    let shuffledOrder = [];
+    let shuffledIndex = -1;
+
+    function formatTime(seconds) {
+        const min = Math.floor(seconds / 60);
+        const sec = Math.floor(seconds % 60);
+        return `${min}:${sec.toString().padStart(2, '0')}`;
+    }
+
+    function shuffleArray(array) {
+        let shuffled = array.slice();
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+    }
+
+    function playSong(index) {
+        if (index < 0 || index >= songs.length) return;
+
+        currentIndex = index;
+        const songItem = songs[currentIndex];
+        const filePath = songItem.getAttribute('data-file-path');
+        
+        audioPlayer.src = `/media/${encodeURIComponent(filePath)}`;
+        audioPlayer.play()
+            .then(() => {
+                isPlaying = true;
+                playPauseBtn.textContent = "⏸️";
+                const title = songItem.getAttribute("data-title") || "Unknown";
+                playerInfo.textContent = title;
+                songs.forEach((el, idx) => el.classList.toggle("playing", idx === currentIndex));
+            })
+            .catch(error => {
+                console.error("Ошибка воспроизведения:", error);
+                playerInfo.textContent = "Ошибка загрузки песни";
+            });
+    }
+
+    function getNextIndex() {
+        if (isShuffle) {
+            if (shuffledIndex + 1 < shuffledOrder.length) {
+                return shuffledOrder[++shuffledIndex];
+            } else {
+                shuffledOrder = shuffleArray([...Array(songs.length).keys()]);
+                shuffledIndex = 0;
+                return shuffledOrder[shuffledIndex];
+            }
+        } else {
+            return (currentIndex + 1) % songs.length;
+        }
+    }
+
+    function playNext() {
+        playSong(getNextIndex());
+    }
+
+    function getPrevIndex() {
+        if (isShuffle) {
+            if (shuffledIndex - 1 >= 0) {
+                return shuffledOrder[--shuffledIndex];
+            } else {
+                shuffledOrder = shuffleArray([...Array(songs.length).keys()]);
+                shuffledIndex = shuffledOrder.length - 1;
+                return shuffledOrder[shuffledIndex];
+            }
+        } else {
+            return (currentIndex - 1 + songs.length) % songs.length;
+        }
+    }
+
+    function playPrev() {
+        playSong(getPrevIndex());
+    }
+
+    playPauseBtn.addEventListener("click", () => {
+        if (!audioPlayer.src) {
+            if (songs.length > 0) {
+                currentIndex = 0;
+                if (isShuffle) {
+                    shuffledOrder = shuffleArray([...Array(songs.length).keys()]);
+                    shuffledIndex = 0;
+                    playSong(shuffledOrder[shuffledIndex]);
+                } else {
+                    playSong(currentIndex);
+                }
+            }
+            return;
+        }
+        if (isPlaying) {
+            audioPlayer.pause();
+            isPlaying = false;
+            playPauseBtn.textContent = "▶️";
+        } else {
+            audioPlayer.play();
+            isPlaying = true;
+            playPauseBtn.textContent = "⏸️";
+        }
+    });
+
+    nextBtn.addEventListener("click", playNext);
+    prevBtn.addEventListener("click", playPrev);
+
+    shuffleBtn.addEventListener("click", () => {
+        isShuffle = !isShuffle;
+        shuffleBtn.style.color = isShuffle ? "#1de9b6" : "white";
+        if (isShuffle) {
+            shuffledOrder = shuffleArray([...Array(songs.length).keys()]);
+            shuffledIndex = shuffledOrder.indexOf(currentIndex);
+        }
+    });
+
+    seekSlider.addEventListener("input", () => {
+        if (audioPlayer.duration) {
+            const seekTo = audioPlayer.duration * (seekSlider.value / 100);
+            audioPlayer.currentTime = seekTo;
+        }
+    });
+
+    audioPlayer.addEventListener("timeupdate", () => {
+        if (audioPlayer.duration) {
+            const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+            seekSlider.value = progress;
+            timeDisplay.textContent = formatTime(audioPlayer.currentTime) + " / " + formatTime(audioPlayer.duration);
+        }
+    });
+
+    audioPlayer.addEventListener("ended", playNext);
+
+    songs.forEach((songItem, index) => {
+        songItem.addEventListener("click", (e) => {
+            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+            
+            if (isShuffle) {
+                shuffledIndex = shuffledOrder.indexOf(index);
+            }
+            playSong(index);
+        });
+    });
+
+    // Обработка ошибок воспроизведения
+    audioPlayer.addEventListener('error', () => {
+        playerInfo.textContent = "Ошибка воспроизведения";
+        console.error("Audio error:", audioPlayer.error);
+    });
+</script>
+</body>
+</html>
